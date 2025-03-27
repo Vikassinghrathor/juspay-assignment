@@ -1,6 +1,6 @@
 import React, { useContext, useEffect, useRef, useState } from "react";
 import CatSprite from "./CatSprite";
-import { Context } from "../Context";
+import { Context } from "../context";
 import Icon from "./Icon";
 import ButterflySprite from "./ButterflySprite";
 import BeetalSprite from "./BeetalSprite";

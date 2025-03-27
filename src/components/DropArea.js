@@ -1,6 +1,6 @@
 import React, { useContext, useEffect, useState } from "react";
 import Icon from "./Icon";
-import { Context } from "../Context";
+import { Context } from "../context";
 
 export default function MidArea() {
   const { midAreaData, setMidAreaData } = useContext(Context);

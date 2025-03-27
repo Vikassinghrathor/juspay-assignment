@@ -2,7 +2,7 @@ import React from "react";
 import Sidebar from "./components/Sidebar";
 import MidArea from "./components/DropArea";
 import PreviewArea from "./components/PreviewArea";
-import AppContext from "./Context";
+import AppContext from "./context";
 
 export default function App() {
   return (
