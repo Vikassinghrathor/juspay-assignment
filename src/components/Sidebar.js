@@ -8,6 +8,8 @@ export default function Sidebar() {
   const [rightTurn, setRightTurn] = useState(15);
   const [xCoordinate, setXCoordinate] = useState(0);
   const [yCoordinate, setYCoordinate] = useState(0);
+  const [sayText, setSayText] = useState("Hello!");
+  const [sizeChange, setSizeChange] = useState(10);
 
   return (
     <div className="w-60 flex-none h-full overflow-y-auto flex flex-col items-start p-2 border-r border-gray-200">
@@ -107,6 +109,71 @@ export default function Sidebar() {
           className="mx-2 px-0.5 text-black w-10"
           type="text"
         />
+      </div>
+
+      <div className="font-bold mt-4"> {"Looks"} </div>
+      <div
+        draggable={true}
+        onDragStart={(e) => {
+          e.dataTransfer.setData("text/plain", `block5, show`);
+        }}
+        className="flex flex-row flex-wrap bg-purple-500 text-white px-2 py-1 my-2 text-sm cursor-pointer"
+      >
+        {"Show sprite"}
+      </div>
+
+      <div
+        draggable={true}
+        onDragStart={(e) => {
+          e.dataTransfer.setData("text/plain", `block6, hide`);
+        }}
+        className="flex flex-row flex-wrap bg-purple-500 text-white px-2 py-1 my-2 text-sm cursor-pointer"
+      >
+        {"Hide sprite"}
+      </div>
+
+      <div
+        draggable={true}
+        onDragStart={(e) => {
+          e.dataTransfer.setData("text/plain", `block7, ${sayText}`);
+        }}
+        className="flex flex-row flex-wrap bg-purple-500 text-white px-2 py-1 my-2 text-sm cursor-pointer"
+      >
+        {"Say"}
+        <input
+          value={sayText}
+          onChange={(e) => setSayText(e.target.value)}
+          className="mx-2 px-0.5 text-black w-20"
+          type="text"
+        />
+      </div>
+
+      <div
+        draggable={true}
+        onDragStart={(e) => {
+          e.dataTransfer.setData("text/plain", `block8, ${sizeChange}`);
+        }}
+        className="flex flex-row flex-wrap bg-purple-500 text-white px-2 py-1 my-2 text-sm cursor-pointer"
+      >
+        {"Change size by"}
+        <input
+          value={sizeChange}
+          onChange={(e) => setSizeChange(e.target.value)}
+          className="mx-2 px-0.5 text-black w-10"
+          type="text"
+        />
+      </div>
+
+      <div className="font-bold mt-4"> {"Events"} </div>
+      <div
+        draggable={true}
+        onDragStart={(e) => {
+          e.dataTransfer.setData("text/plain", `block9, click`);
+        }}
+        className="flex flex-row flex-wrap bg-yellow-400 text-white px-2 py-1 my-2 text-sm cursor-pointer"
+      >
+        {"When sprite clicked"}
+        <Icon name="mouse-pointer" size={15} className="text-white mx-2" />
       </div>
     </div>
   );

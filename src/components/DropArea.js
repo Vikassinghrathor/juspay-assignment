@@ -17,6 +17,8 @@ export default function MidArea() {
         const blockKeyList = e.dataTransfer.getData("text/plain");
         const blockKey = blockKeyList.split(", ")[0];
         const blockData = blockKeyList.split(", ")[1];
+
+        // Motion blocks
         if (blockKey == "block1") {
           let JSXElm = (
             <div
@@ -123,6 +125,110 @@ export default function MidArea() {
                 type="text"
               />{" "}
               times
+            </div>
+          );
+          let JSXElm1 = { ...JSXElm, sprite: activeSprite };
+          setMidAreaData([...midAreaData, JSXElm1]);
+        }
+        // Looks blocks
+        else if (blockKey == "block5") {
+          let JSXElm = (
+            <div
+              draggable={true}
+              className="flex flex-row flex-wrap bg-purple-500 text-white px-2 py-1 my-2 text-sm cursor-pointer"
+            >
+              {"Show sprite"}
+              <input
+                id="show"
+                onClick={(e) => e.stopPropagation()}
+                className="hidden"
+                value="true"
+                disabled
+                type="text"
+              />
+            </div>
+          );
+          let JSXElm1 = { ...JSXElm, sprite: activeSprite };
+          setMidAreaData([...midAreaData, JSXElm1]);
+        } else if (blockKey == "block6") {
+          let JSXElm = (
+            <div
+              draggable={true}
+              className="flex flex-row flex-wrap bg-purple-500 text-white px-2 py-1 my-2 text-sm cursor-pointer"
+            >
+              {"Hide sprite"}
+              <input
+                id="hide"
+                onClick={(e) => e.stopPropagation()}
+                className="hidden"
+                value="true"
+                disabled
+                type="text"
+              />
+            </div>
+          );
+          let JSXElm1 = { ...JSXElm, sprite: activeSprite };
+          setMidAreaData([...midAreaData, JSXElm1]);
+        } else if (blockKey == "block7") {
+          let JSXElm = (
+            <div
+              draggable={true}
+              className="flex flex-row flex-wrap bg-purple-500 text-white px-2 py-1 my-2 text-sm cursor-pointer"
+            >
+              {"Say"}
+              <input
+                id="say"
+                onClick={(e) => e.stopPropagation()}
+                className="mx-2 px-0.5 text-black w-20"
+                value={blockData}
+                disabled
+                type="text"
+              />
+            </div>
+          );
+          let JSXElm1 = { ...JSXElm, sprite: activeSprite };
+          setMidAreaData([...midAreaData, JSXElm1]);
+        } else if (blockKey == "block8") {
+          let JSXElm = (
+            <div
+              draggable={true}
+              className="flex flex-row flex-wrap bg-purple-500 text-white px-2 py-1 my-2 text-sm cursor-pointer"
+            >
+              {"Change size by"}
+              <input
+                id="size"
+                onClick={(e) => e.stopPropagation()}
+                className="mx-2 px-0.5 text-black w-10"
+                value={blockData}
+                disabled
+                type="text"
+              />
+            </div>
+          );
+          let JSXElm1 = { ...JSXElm, sprite: activeSprite };
+          setMidAreaData([...midAreaData, JSXElm1]);
+        }
+        // Events blocks
+        else if (blockKey == "block9") {
+          let JSXElm = (
+            <div
+              draggable={true}
+              className="flex flex-row flex-wrap bg-yellow-400 text-white px-2 py-1 my-2 text-sm cursor-pointer"
+            >
+              {"When sprite clicked"}
+              <Icon
+                name="mouse-pointer"
+                size={15}
+                className="text-white mx-2"
+              />
+              <input
+                id="event"
+                onClick={(e) => e.stopPropagation()}
+                className="hidden"
+                value="click"
+                disabled
+                type="text"
+              />
             </div>
           );
           let JSXElm1 = { ...JSXElm, sprite: activeSprite };

@@ -17,6 +17,9 @@ const AppContext = ({ children }) => {
       x: 0,
       y: 0,
       rotate: 0,
+      visible: true,
+      size: 100, // 100% is default
+      message: "",
     },
   ]);
 

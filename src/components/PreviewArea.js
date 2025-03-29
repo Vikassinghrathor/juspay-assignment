@@ -16,6 +16,15 @@ export default function PreviewArea() {
   } = useContext(Context);
   const [isCollision, setIsCollision] = useState(false);
   const spriteDivRef = useRef();
+  const containerRef = useRef();
+  const [containerBounds, setContainerBounds] = useState({
+    width: 0,
+    height: 0,
+  });
+  const [eventListeners, setEventListeners] = useState({});
+
+  // Default sprite size to calculate boundaries
+  const defaultSpriteSize = 50;
 
   const [sprites, setSprites] = useState([
     {
@@ -37,6 +46,55 @@ export default function PreviewArea() {
       isActive: "gray",
     },
   ]);
+
+  // Get container bounds when component mounts
+  useEffect(() => {
+    if (containerRef.current) {
+      const bounds = containerRef.current.getBoundingClientRect();
+      setContainerBounds({
+        width: bounds.width,
+        height: bounds.height,
+      });
+    }
+
+    // Set up a resize observer to update bounds when window resizes
+    const resizeObserver = new ResizeObserver((entries) => {
+      const { width, height } = entries[0].contentRect;
+      setContainerBounds({ width, height });
+
+      // Adjust sprite positions if they are outside the boundaries after resize
+      setMultipleSprites((prevSprites) =>
+        prevSprites.map((sprite) => {
+          return ensureSpriteInBounds(sprite, { width, height });
+        })
+      );
+    });
+
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+
+    return () => {
+      if (containerRef.current) {
+        resizeObserver.unobserve(containerRef.current);
+      }
+    };
+  }, []);
+
+  // Helper function to ensure sprite stays within boundaries
+  const ensureSpriteInBounds = (sprite, bounds) => {
+    if (!bounds.width || !bounds.height) return sprite;
+
+    // Calculate effective size based on scaling
+    const spriteSize = ((sprite.size || 100) / 100) * defaultSpriteSize;
+    const buffer = spriteSize / 2;
+
+    // Ensure sprite stays within bounds with buffer for rotation and scaling
+    const maxX = Math.max(buffer, Math.min(bounds.width - buffer, sprite.x));
+    const maxY = Math.max(buffer, Math.min(bounds.height - buffer, sprite.y));
+
+    return { ...sprite, x: maxX, y: maxY };
+  };
 
   const handlePlayAnimation = () => {
     // If midAreaData is empty, return early
@@ -62,10 +120,19 @@ export default function PreviewArea() {
       const instructions = spriteInstructions[sprite];
 
       // Safe access to repeat count
-      const repeatCount =
-        instructions[0]?.props?.children?.[1]?.props?.id === "repeat"
-          ? parseInt(instructions[0].props.children[1].props.value || 1)
-          : 1;
+      const repeatIndex = instructions.findIndex(
+        (instruction) =>
+          instruction?.props?.children?.[1]?.props?.id === "repeat"
+      );
+
+      let repeatCount = 1;
+      if (repeatIndex !== -1) {
+        repeatCount = parseInt(
+          instructions[repeatIndex].props.children[1].props.value || 1
+        );
+        // Remove repeat instruction from processing
+        instructions.splice(repeatIndex, 1);
+      }
 
       let currentRepeat = 0;
 
@@ -82,51 +149,194 @@ export default function PreviewArea() {
         });
 
         currentRepeat++;
-      }, instructions.length * 1000);
+      }, instructions.length * 1000 || 1000); // Ensure at least 1000ms interval
     });
 
     setIsCollision(false);
+    setCollision([]);
   };
 
   const processElement = (midElm, spriteTitle) => {
+    if (!midElm || !midElm.props || !midElm.props.children) {
+      console.log("Invalid element", midElm);
+      return;
+    }
+
+    // Find input element and its ID
+    let inputElement = null;
+    let inputId = null;
+    let inputValue = null;
+
+    // Search for the input element among children
+    const findInput = (children) => {
+      if (!children) return;
+      if (Array.isArray(children)) {
+        for (let child of children) {
+          if (child && child.props && child.props.id) {
+            inputElement = child;
+            inputId = child.props.id;
+            inputValue = child.props.value;
+            return true;
+          } else if (child && child.props && child.props.children) {
+            if (findInput(child.props.children)) {
+              return true;
+            }
+          }
+        }
+      } else if (children.props && children.props.id) {
+        inputElement = children;
+        inputId = children.props.id;
+        inputValue = children.props.value;
+        return true;
+      } else if (children.props && children.props.children) {
+        return findInput(children.props.children);
+      }
+      return false;
+    };
+
+    findInput(midElm.props.children);
+
+    if (!inputId) {
+      console.log("No input found in element", midElm);
+      return;
+    }
+
     setMultipleSprites((prevSprites) =>
       prevSprites.map((sp) => {
         if (sp.title === spriteTitle) {
-          let { rotate: rotatePos, x: xPos, y: yPos } = sp;
+          let {
+            rotate: rotatePos,
+            x: xPos,
+            y: yPos,
+            visible,
+            size,
+            message,
+          } = sp;
+          let updatedSprite = { ...sp };
 
-          // Safe access to instruction type and value
-          let type = midElm?.props?.children?.[1]?.props?.id;
-          let val = parseInt(midElm?.props?.children?.[1]?.props?.value || 0);
+          switch (inputId) {
+            case "move":
+              const dist = parseInt(inputValue || 0);
+              xPos += dist * Math.cos((rotatePos * Math.PI) / 180);
+              yPos += dist * Math.sin((rotatePos * Math.PI) / 180);
 
-          // Alternate way to get type and value if first attempt fails
-          if (type == undefined || val == undefined) {
-            type = midElm?.props?.children?.[2]?.props?.id;
-            val = parseInt(midElm?.props?.children?.[2]?.props?.value || 0);
+              // Calculate effective size based on scaling for boundary checking
+              const spriteSize = ((size || 100) / 100) * defaultSpriteSize;
+              const buffer = spriteSize / 2;
+
+              // Keep sprite within bounds accounting for size and rotation
+              if (containerBounds.width && containerBounds.height) {
+                xPos = Math.max(
+                  buffer,
+                  Math.min(xPos, containerBounds.width - buffer)
+                );
+                yPos = Math.max(
+                  buffer,
+                  Math.min(yPos, containerBounds.height - buffer)
+                );
+              }
+
+              updatedSprite = { ...updatedSprite, x: xPos, y: yPos };
+              break;
+
+            case "left":
+              rotatePos -= parseInt(inputValue || 0);
+              updatedSprite = { ...updatedSprite, rotate: rotatePos };
+              break;
+
+            case "right":
+              rotatePos += parseInt(inputValue || 0);
+              updatedSprite = { ...updatedSprite, rotate: rotatePos };
+              break;
+
+            case "x":
+              // Handle goto x, y
+              const xInput = midElm.props.children.find(
+                (child) => child?.props?.id === "x"
+              );
+              const yInput = midElm.props.children.find(
+                (child) => child?.props?.id === "y"
+              );
+
+              if (xInput && yInput) {
+                xPos = parseInt(xInput.props.value || 0);
+                yPos = parseInt(yInput.props.value || 0);
+
+                // Calculate effective size based on scaling for boundary checking
+                const spriteSize = ((size || 100) / 100) * defaultSpriteSize;
+                const buffer = spriteSize / 2;
+
+                // Keep within bounds accounting for size and rotation
+                if (containerBounds.width && containerBounds.height) {
+                  xPos = Math.max(
+                    buffer,
+                    Math.min(xPos, containerBounds.width - buffer)
+                  );
+                  yPos = Math.max(
+                    buffer,
+                    Math.min(yPos, containerBounds.height - buffer)
+                  );
+                }
+
+                updatedSprite = { ...updatedSprite, x: xPos, y: yPos };
+              }
+              break;
+
+            // Implement Looks blocks
+            case "show":
+              updatedSprite = { ...updatedSprite, visible: true };
+              break;
+
+            case "hide":
+              updatedSprite = { ...updatedSprite, visible: false };
+              break;
+
+            case "say":
+              updatedSprite = { ...updatedSprite, message: inputValue || "" };
+              // Clear message after 2 seconds
+              setTimeout(() => {
+                setMultipleSprites((prevSprites) =>
+                  prevSprites.map((s) =>
+                    s.title === spriteTitle ? { ...s, message: "" } : s
+                  )
+                );
+              }, 2000);
+              break;
+
+            case "size":
+              const newSize = (sp.size || 100) + parseInt(inputValue || 0);
+              const updatedSize = Math.max(10, Math.min(200, newSize));
+
+              // Update the sprite with new size
+              updatedSprite = { ...updatedSprite, size: updatedSize };
+
+              // Ensure sprite still within bounds after resize
+              const newSpriteSize = (updatedSize / 100) * defaultSpriteSize;
+              const newBuffer = newSpriteSize / 2;
+
+              if (containerBounds.width && containerBounds.height) {
+                const newX = Math.max(
+                  newBuffer,
+                  Math.min(xPos, containerBounds.width - newBuffer)
+                );
+                const newY = Math.max(
+                  newBuffer,
+                  Math.min(yPos, containerBounds.height - newBuffer)
+                );
+                updatedSprite = { ...updatedSprite, x: newX, y: newY };
+              }
+              break;
+
+            // Handle Events
+            case "event":
+              // This is just a trigger, no state change needed
+              break;
+
+            default:
+              console.log("Unknown input type:", inputId);
           }
 
-          if (type === "x") {
-            // Safe access to x and y coordinates
-            const type2 = midElm?.props?.children?.[3]?.props?.id;
-            const val2 = parseInt(
-              midElm?.props?.children?.[3]?.props?.value || 0
-            );
-            xPos = val;
-            yPos = val2;
-          }
-
-          if (type === "move") {
-            const dist = val;
-            xPos += dist * Math.cos((rotatePos * Math.PI) / 180);
-            yPos += dist * Math.sin((rotatePos * Math.PI) / 180);
-          }
-          if (type === "left") {
-            rotatePos -= val;
-          }
-          if (type === "right") {
-            rotatePos += val;
-          }
-
-          return { ...sp, rotate: rotatePos, x: xPos, y: yPos };
+          return updatedSprite;
         }
         return sp;
       })
@@ -137,27 +347,63 @@ export default function PreviewArea() {
     let obj1 = sprites.find((sp) => {
       if (sp.isActive === "blue") return sp;
     });
+
+    if (!obj1) {
+      // If no sprite is selected, use the first one
+      obj1 = sprites[0];
+    }
+
+    // Center the new sprite in the container
+    const centerX = containerBounds.width / 2;
+    const centerY = containerBounds.height / 2;
+
     obj1 = {
       ...obj1,
       title: `${obj1.title}_${multipleSprites.length + 1}`,
       isActive: "gray",
-      x: multipleSprites.length * 100,
-      y: 0,
+      // Place sprite in the center of the preview area
+      x: centerX,
+      y: centerY,
       rotate: 0,
+      visible: true,
+      size: 100,
+      message: "",
     };
+
     setMultipleSprites([...multipleSprites, obj1]);
     spriteDivRef.current.style.display = "none";
   }
 
   function checkCollision() {
-    for (let sprite1 of multipleSprites) {
-      for (let sprite2 of multipleSprites) {
-        if (sprite1.title !== sprite2.title) {
-          let distance = Math.sqrt(
-            (sprite1.x - sprite2.x) ** 2 + (sprite1.y - sprite2.y) ** 2
-          );
-          if (distance < 50) {
-            setCollision([sprite1, sprite2]);
+    const collidedSprites = [];
+
+    for (let i = 0; i < multipleSprites.length; i++) {
+      for (let j = i + 1; j < multipleSprites.length; j++) {
+        const sprite1 = multipleSprites[i];
+        const sprite2 = multipleSprites[j];
+
+        // Skip hidden sprites
+        if (!sprite1.visible || !sprite2.visible) continue;
+
+        // Calculate distance between sprites
+        const distance = Math.sqrt(
+          Math.pow(sprite1.x - sprite2.x, 2) +
+            Math.pow(sprite1.y - sprite2.y, 2)
+        );
+
+        // Adjust collision threshold based on sprite sizes
+        const sprite1Size = ((sprite1.size || 100) / 100) * defaultSpriteSize;
+        const sprite2Size = ((sprite2.size || 100) / 100) * defaultSpriteSize;
+        const collisionThreshold = sprite1Size + sprite2Size - 20; // Adjust for some overlap
+
+        if (distance < collisionThreshold) {
+          collidedSprites.push(sprite1);
+          collidedSprites.push(sprite2);
+
+          // Only handle first collision for simplicity
+          if (collidedSprites.length === 2) {
+            setCollision(collidedSprites);
+            return;
           }
         }
       }
@@ -165,24 +411,74 @@ export default function PreviewArea() {
   }
 
   async function swapAnimation() {
-    let collisionSprite = [];
-    collision.map((elm) => {
-      collisionSprite.push(elm.title);
-    });
+    if (collision.length !== 2) return;
 
-    await setMidAreaData(() =>
+    const sprite1 = collision[0];
+    const sprite2 = collision[1];
+
+    // Get all instructions for both sprites
+    const sprite1Instructions = midAreaData.filter(
+      (midElm) => midElm.sprite === sprite1.title
+    );
+
+    const sprite2Instructions = midAreaData.filter(
+      (midElm) => midElm.sprite === sprite2.title
+    );
+
+    // Swap instructions between sprites
+    await setMidAreaData(
       midAreaData.map((midElm) => {
-        if (collisionSprite.find((elm) => elm === midElm.sprite)) {
-          if (midElm.sprite == collisionSprite[0]) {
-            return { ...midElm, sprite: collisionSprite[1] };
-          }
-          return { ...midElm, sprite: collisionSprite[0] };
+        if (midElm.sprite === sprite1.title) {
+          return { ...midElm, sprite: sprite2.title };
+        }
+        if (midElm.sprite === sprite2.title) {
+          return { ...midElm, sprite: sprite1.title };
         }
         return midElm;
       })
     );
+
     setIsCollision(true);
   }
+
+  // Setup event listeners for sprites
+  useEffect(() => {
+    const newEventListeners = {};
+
+    multipleSprites.forEach((sprite) => {
+      // Create a listener function for each sprite
+      newEventListeners[sprite.title] = () => {
+        // Execute all "When sprite clicked" events for this sprite
+        const clickEvents = midAreaData.filter(
+          (midElm) =>
+            midElm.sprite === sprite.title &&
+            midElm.props?.children?.some(
+              (child) =>
+                child?.props?.id === "event" && child?.props?.value === "click"
+            )
+        );
+
+        if (clickEvents.length > 0) {
+          // Process all instructions after the event block
+          const spriteInstructions = midAreaData.filter(
+            (midElm) =>
+              midElm.sprite === sprite.title &&
+              !midElm.props?.children?.some(
+                (child) => child?.props?.id === "event"
+              )
+          );
+
+          spriteInstructions.forEach((instruction, index) => {
+            setTimeout(() => {
+              processElement(instruction, sprite.title);
+            }, index * 500);
+          });
+        }
+      };
+    });
+
+    setEventListeners(newEventListeners);
+  }, [multipleSprites, midAreaData]);
 
   useEffect(() => {
     if (collision.length === 0) {
@@ -204,6 +500,21 @@ export default function PreviewArea() {
     }
   }, [collision]);
 
+  // Update sprite position if container bounds change and sprites would be outside
+  useEffect(() => {
+    if (
+      containerBounds.width &&
+      containerBounds.height &&
+      multipleSprites.length > 0
+    ) {
+      setMultipleSprites((prevSprites) =>
+        prevSprites.map((sprite) => {
+          return ensureSpriteInBounds(sprite, containerBounds);
+        })
+      );
+    }
+  }, [containerBounds]);
+
   return (
     <>
       <button
@@ -221,26 +532,49 @@ export default function PreviewArea() {
         Play <Icon name="flag" size={15} className="text-green-600 mx-2" />
       </button>
 
-      <div className="flex relative h-full overflow-y-auto px-2 py-6 w-full">
+      <div
+        ref={containerRef}
+        className="flex relative h-full overflow-hidden px-2 py-6 w-full border-2 border-gray-300 rounded-md"
+        style={{ minHeight: "400px" }}
+      >
         {multipleSprites?.map((sp, id) => (
-          <span
+          <div
             key={id}
-            className=" absolute w-min"
+            className="absolute"
             style={{
               transition: "all 1s linear",
               left: `${sp.x}px`,
               top: `${sp.y}px`,
+              display: sp.visible === false ? "none" : "block",
+              transform: `scale(${(sp.size || 100) / 100})`,
+              transformOrigin: "center",
+              cursor: "pointer",
             }}
+            onClick={eventListeners[sp.title]}
           >
             <div
               style={{
                 transform: `rotate(${sp.rotate}deg)`,
                 width: "fit-content",
+                position: "relative",
               }}
             >
               {sp.component}
+              {sp.message && (
+                <div
+                  className="absolute bg-white p-2 rounded-md border border-gray-300"
+                  style={{
+                    top: "-40px",
+                    left: "30px",
+                    whiteSpace: "nowrap",
+                    zIndex: 10,
+                  }}
+                >
+                  {sp.message}
+                </div>
+              )}
             </div>
-          </span>
+          </div>
         ))}
       </div>
       <div className="flex items-center absolute text-black bottom-2 right-0">
@@ -253,7 +587,7 @@ export default function PreviewArea() {
             <Icon name="plus" className="cursor-pointer" />
           </div>
         </div>
-        <div className=" flex">
+        <div className="flex">
           {multipleSprites?.map((elm, id) => (
             <div
               key={id}
@@ -273,6 +607,7 @@ export default function PreviewArea() {
                     ? "rgba(147, 197, 253, 1)"
                     : "rgba(209, 213, 219, 1)"
                 }`,
+                opacity: elm.visible === false ? 0.5 : 1,
               }}
               className={`cursor-pointer border-2 border-${elm.isActive}-300 p-2 rounded-md m-1`}
             >
@@ -285,10 +620,10 @@ export default function PreviewArea() {
       <div
         ref={spriteDivRef}
         style={{ display: "none" }}
-        className="px-3 w-screen h-screen fixed top-0 left-0 bg-white"
+        className="px-3 w-screen h-screen fixed top-0 left-0 bg-white z-50"
       >
         <div className="text-lg font-bold my-3">Add New Sprite</div>
-        <div className=" flex">
+        <div className="flex flex-wrap">
           {sprites.map((elm) => (
             <div
               onClick={() => {
