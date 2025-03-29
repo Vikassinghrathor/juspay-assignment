@@ -23,9 +23,6 @@ export default function PreviewArea() {
   });
   const [eventListeners, setEventListeners] = useState({});
 
-  // Default sprite size to calculate boundaries
-  const defaultSpriteSize = 50;
-
   const [sprites, setSprites] = useState([
     {
       id: 1,
@@ -61,13 +58,6 @@ export default function PreviewArea() {
     const resizeObserver = new ResizeObserver((entries) => {
       const { width, height } = entries[0].contentRect;
       setContainerBounds({ width, height });
-
-      // Adjust sprite positions if they are outside the boundaries after resize
-      setMultipleSprites((prevSprites) =>
-        prevSprites.map((sprite) => {
-          return ensureSpriteInBounds(sprite, { width, height });
-        })
-      );
     });
 
     if (containerRef.current) {
@@ -80,21 +70,6 @@ export default function PreviewArea() {
       }
     };
   }, []);
-
-  // Helper function to ensure sprite stays within boundaries
-  const ensureSpriteInBounds = (sprite, bounds) => {
-    if (!bounds.width || !bounds.height) return sprite;
-
-    // Calculate effective size based on scaling
-    const spriteSize = ((sprite.size || 100) / 100) * defaultSpriteSize;
-    const buffer = spriteSize / 2;
-
-    // Ensure sprite stays within bounds with buffer for rotation and scaling
-    const maxX = Math.max(buffer, Math.min(bounds.width - buffer, sprite.x));
-    const maxY = Math.max(buffer, Math.min(bounds.height - buffer, sprite.y));
-
-    return { ...sprite, x: maxX, y: maxY };
-  };
 
   const handlePlayAnimation = () => {
     // If midAreaData is empty, return early
@@ -220,20 +195,10 @@ export default function PreviewArea() {
               xPos += dist * Math.cos((rotatePos * Math.PI) / 180);
               yPos += dist * Math.sin((rotatePos * Math.PI) / 180);
 
-              // Calculate effective size based on scaling for boundary checking
-              const spriteSize = ((size || 100) / 100) * defaultSpriteSize;
-              const buffer = spriteSize / 2;
-
-              // Keep sprite within bounds accounting for size and rotation
+              // Keep sprite within bounds
               if (containerBounds.width && containerBounds.height) {
-                xPos = Math.max(
-                  buffer,
-                  Math.min(xPos, containerBounds.width - buffer)
-                );
-                yPos = Math.max(
-                  buffer,
-                  Math.min(yPos, containerBounds.height - buffer)
-                );
+                xPos = Math.max(0, Math.min(xPos, containerBounds.width - 50));
+                yPos = Math.max(0, Math.min(yPos, containerBounds.height - 50));
               }
 
               updatedSprite = { ...updatedSprite, x: xPos, y: yPos };
@@ -262,19 +227,15 @@ export default function PreviewArea() {
                 xPos = parseInt(xInput.props.value || 0);
                 yPos = parseInt(yInput.props.value || 0);
 
-                // Calculate effective size based on scaling for boundary checking
-                const spriteSize = ((size || 100) / 100) * defaultSpriteSize;
-                const buffer = spriteSize / 2;
-
-                // Keep within bounds accounting for size and rotation
+                // Keep within bounds
                 if (containerBounds.width && containerBounds.height) {
                   xPos = Math.max(
-                    buffer,
-                    Math.min(xPos, containerBounds.width - buffer)
+                    0,
+                    Math.min(xPos, containerBounds.width - 50)
                   );
                   yPos = Math.max(
-                    buffer,
-                    Math.min(yPos, containerBounds.height - buffer)
+                    0,
+                    Math.min(yPos, containerBounds.height - 50)
                   );
                 }
 
@@ -305,26 +266,10 @@ export default function PreviewArea() {
 
             case "size":
               const newSize = (sp.size || 100) + parseInt(inputValue || 0);
-              const updatedSize = Math.max(10, Math.min(200, newSize));
-
-              // Update the sprite with new size
-              updatedSprite = { ...updatedSprite, size: updatedSize };
-
-              // Ensure sprite still within bounds after resize
-              const newSpriteSize = (updatedSize / 100) * defaultSpriteSize;
-              const newBuffer = newSpriteSize / 2;
-
-              if (containerBounds.width && containerBounds.height) {
-                const newX = Math.max(
-                  newBuffer,
-                  Math.min(xPos, containerBounds.width - newBuffer)
-                );
-                const newY = Math.max(
-                  newBuffer,
-                  Math.min(yPos, containerBounds.height - newBuffer)
-                );
-                updatedSprite = { ...updatedSprite, x: newX, y: newY };
-              }
+              updatedSprite = {
+                ...updatedSprite,
+                size: Math.max(10, Math.min(200, newSize)),
+              };
               break;
 
             // Handle Events
@@ -353,17 +298,18 @@ export default function PreviewArea() {
       obj1 = sprites[0];
     }
 
-    // Center the new sprite in the container
-    const centerX = containerBounds.width / 2;
-    const centerY = containerBounds.height / 2;
-
     obj1 = {
       ...obj1,
       title: `${obj1.title}_${multipleSprites.length + 1}`,
       isActive: "gray",
-      // Place sprite in the center of the preview area
-      x: centerX,
-      y: centerY,
+      x: Math.min(
+        (multipleSprites.length * 100) % (containerBounds.width - 100),
+        containerBounds.width - 100
+      ),
+      y:
+        Math.floor(
+          (multipleSprites.length * 100) / (containerBounds.width - 100)
+        ) * 100,
       rotate: 0,
       visible: true,
       size: 100,
@@ -392,8 +338,8 @@ export default function PreviewArea() {
         );
 
         // Adjust collision threshold based on sprite sizes
-        const sprite1Size = ((sprite1.size || 100) / 100) * defaultSpriteSize;
-        const sprite2Size = ((sprite2.size || 100) / 100) * defaultSpriteSize;
+        const sprite1Size = ((sprite1.size || 100) / 100) * 50;
+        const sprite2Size = ((sprite2.size || 100) / 100) * 50;
         const collisionThreshold = sprite1Size + sprite2Size - 20; // Adjust for some overlap
 
         if (distance < collisionThreshold) {
@@ -499,21 +445,6 @@ export default function PreviewArea() {
       swapAnimation();
     }
   }, [collision]);
-
-  // Update sprite position if container bounds change and sprites would be outside
-  useEffect(() => {
-    if (
-      containerBounds.width &&
-      containerBounds.height &&
-      multipleSprites.length > 0
-    ) {
-      setMultipleSprites((prevSprites) =>
-        prevSprites.map((sprite) => {
-          return ensureSpriteInBounds(sprite, containerBounds);
-        })
-      );
-    }
-  }, [containerBounds]);
 
   return (
     <>
