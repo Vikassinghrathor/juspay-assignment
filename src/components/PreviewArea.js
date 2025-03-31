@@ -22,6 +22,7 @@ export default function PreviewArea() {
     height: 0,
   });
   const [eventListeners, setEventListeners] = useState({});
+  const [isPlaying, setIsPlaying] = useState(false);
 
   const [sprites, setSprites] = useState([
     {
@@ -72,9 +73,15 @@ export default function PreviewArea() {
   }, []);
 
   const handlePlayAnimation = () => {
+    // If already playing, don't restart animations
+    if (isPlaying) return;
+
+    setIsPlaying(true);
+
     // If midAreaData is empty, return early
     if (!midAreaData || midAreaData.length === 0) {
       console.log("No animation instructions to play");
+      setIsPlaying(false);
       return;
     }
 
@@ -90,6 +97,8 @@ export default function PreviewArea() {
       }
       spriteInstructions[sprite].push(midElm);
     });
+
+    const animationPromises = [];
 
     Object.keys(spriteInstructions).forEach((sprite) => {
       const instructions = spriteInstructions[sprite];
@@ -111,20 +120,38 @@ export default function PreviewArea() {
 
       let currentRepeat = 0;
 
-      const intervalId = setInterval(() => {
-        if (currentRepeat >= repeatCount) {
-          clearInterval(intervalId);
-          return;
-        }
+      const animationPromise = new Promise((resolve) => {
+        const intervalId = setInterval(() => {
+          if (currentRepeat >= repeatCount) {
+            clearInterval(intervalId);
+            resolve();
+            return;
+          }
 
-        instructions.forEach((midElm, index) => {
-          setTimeout(() => {
-            processElement(midElm, sprite);
-          }, index * 1000);
-        });
+          const stepPromises = [];
 
-        currentRepeat++;
-      }, instructions.length * 1000 || 1000); // Ensure at least 1000ms interval
+          instructions.forEach((midElm, index) => {
+            const stepPromise = new Promise((resolveStep) => {
+              setTimeout(() => {
+                processElement(midElm, sprite);
+                resolveStep();
+              }, index * 1000);
+            });
+            stepPromises.push(stepPromise);
+          });
+
+          Promise.all(stepPromises).then(() => {
+            currentRepeat++;
+          });
+        }, instructions.length * 1000 || 1000); // Ensure at least 1000ms interval
+      });
+
+      animationPromises.push(animationPromise);
+    });
+
+    // When all animations complete
+    Promise.all(animationPromises).then(() => {
+      setIsPlaying(false);
     });
 
     setIsCollision(false);
@@ -189,6 +216,10 @@ export default function PreviewArea() {
           } = sp;
           let updatedSprite = { ...sp };
 
+          // Calculate sprite dimensions based on size
+          const spriteWidth = ((sp.size || 100) / 100) * 50;
+          const spriteHeight = ((sp.size || 100) / 100) * 50;
+
           switch (inputId) {
             case "move":
               const dist = parseInt(inputValue || 0);
@@ -197,8 +228,14 @@ export default function PreviewArea() {
 
               // Keep sprite within bounds
               if (containerBounds.width && containerBounds.height) {
-                xPos = Math.max(0, Math.min(xPos, containerBounds.width - 50));
-                yPos = Math.max(0, Math.min(yPos, containerBounds.height - 50));
+                xPos = Math.max(
+                  0,
+                  Math.min(xPos, containerBounds.width - spriteWidth)
+                );
+                yPos = Math.max(
+                  0,
+                  Math.min(yPos, containerBounds.height - spriteHeight)
+                );
               }
 
               updatedSprite = { ...updatedSprite, x: xPos, y: yPos };
@@ -231,11 +268,11 @@ export default function PreviewArea() {
                 if (containerBounds.width && containerBounds.height) {
                   xPos = Math.max(
                     0,
-                    Math.min(xPos, containerBounds.width - 50)
+                    Math.min(xPos, containerBounds.width - spriteWidth)
                   );
                   yPos = Math.max(
                     0,
-                    Math.min(yPos, containerBounds.height - 50)
+                    Math.min(yPos, containerBounds.height - spriteHeight)
                   );
                 }
 
@@ -266,9 +303,29 @@ export default function PreviewArea() {
 
             case "size":
               const newSize = (sp.size || 100) + parseInt(inputValue || 0);
+              const clampedSize = Math.max(10, Math.min(200, newSize));
+
+              // Check if the new size would push the sprite outside bounds
+              let newX = sp.x;
+              let newY = sp.y;
+              const newWidth = (clampedSize / 100) * 50;
+              const newHeight = (clampedSize / 100) * 50;
+
+              if (containerBounds.width && containerBounds.height) {
+                // Adjust position if needed to keep sprite in bounds
+                if (newX + newWidth > containerBounds.width) {
+                  newX = containerBounds.width - newWidth;
+                }
+                if (newY + newHeight > containerBounds.height) {
+                  newY = containerBounds.height - newHeight;
+                }
+              }
+
               updatedSprite = {
                 ...updatedSprite,
-                size: Math.max(10, Math.min(200, newSize)),
+                size: clampedSize,
+                x: newX,
+                y: newY,
               };
               break;
 
@@ -321,6 +378,8 @@ export default function PreviewArea() {
   }
 
   function checkCollision() {
+    if (!isPlaying) return; // Only check collision when animations are playing
+
     const collidedSprites = [];
 
     for (let i = 0; i < multipleSprites.length; i++) {
@@ -331,16 +390,23 @@ export default function PreviewArea() {
         // Skip hidden sprites
         if (!sprite1.visible || !sprite2.visible) continue;
 
-        // Calculate distance between sprites
-        const distance = Math.sqrt(
-          Math.pow(sprite1.x - sprite2.x, 2) +
-            Math.pow(sprite1.y - sprite2.y, 2)
-        );
-
-        // Adjust collision threshold based on sprite sizes
+        // Calculate sprite centers
         const sprite1Size = ((sprite1.size || 100) / 100) * 50;
         const sprite2Size = ((sprite2.size || 100) / 100) * 50;
-        const collisionThreshold = sprite1Size + sprite2Size - 20; // Adjust for some overlap
+
+        const sprite1CenterX = sprite1.x + sprite1Size / 2;
+        const sprite1CenterY = sprite1.y + sprite1Size / 2;
+        const sprite2CenterX = sprite2.x + sprite2Size / 2;
+        const sprite2CenterY = sprite2.y + sprite2Size / 2;
+
+        // Calculate distance between sprite centers
+        const distance = Math.sqrt(
+          Math.pow(sprite1CenterX - sprite2CenterX, 2) +
+            Math.pow(sprite1CenterY - sprite2CenterY, 2)
+        );
+
+        // Collision threshold based on sprite sizes
+        const collisionThreshold = (sprite1Size + sprite2Size) / 2;
 
         if (distance < collisionThreshold) {
           collidedSprites.push(sprite1);
@@ -426,11 +492,22 @@ export default function PreviewArea() {
     setEventListeners(newEventListeners);
   }, [multipleSprites, midAreaData]);
 
+  // Check for collisions regularly when animations are playing
   useEffect(() => {
-    if (collision.length === 0) {
-      checkCollision();
+    let collisionInterval;
+
+    if (isPlaying) {
+      collisionInterval = setInterval(() => {
+        checkCollision();
+      }, 100); // Check every 100ms
     }
-  }, [multipleSprites]);
+
+    return () => {
+      if (collisionInterval) {
+        clearInterval(collisionInterval);
+      }
+    };
+  }, [isPlaying, multipleSprites]);
 
   useEffect(() => {
     if (isCollision) {
@@ -446,6 +523,24 @@ export default function PreviewArea() {
     }
   }, [collision]);
 
+  // Keep sprites within boundaries when resizing the container
+  useEffect(() => {
+    if (containerBounds.width && containerBounds.height) {
+      setMultipleSprites((prevSprites) =>
+        prevSprites.map((sprite) => {
+          const spriteSize = ((sprite.size || 100) / 100) * 50;
+          const newX = Math.min(sprite.x, containerBounds.width - spriteSize);
+          const newY = Math.min(sprite.y, containerBounds.height - spriteSize);
+
+          if (newX !== sprite.x || newY !== sprite.y) {
+            return { ...sprite, x: newX, y: newY };
+          }
+          return sprite;
+        })
+      );
+    }
+  }, [containerBounds]);
+
   return (
     <>
       <button
@@ -459,8 +554,10 @@ export default function PreviewArea() {
           borderRadius: "5px",
         }}
         onClick={handlePlayAnimation}
+        disabled={isPlaying}
       >
-        Play <Icon name="flag" size={15} className="text-green-600 mx-2" />
+        {isPlaying ? "Playing..." : "Play"}{" "}
+        <Icon name="flag" size={15} className="text-green-600 mx-2" />
       </button>
 
       <div
