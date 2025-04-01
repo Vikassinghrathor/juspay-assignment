@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext } from "react";
 import Icon from "./Icon";
 import { Context } from "../context";
 
@@ -18,8 +18,30 @@ export default function MidArea() {
         const blockKey = blockKeyList.split(", ")[0];
         const blockData = blockKeyList.split(", ")[1];
 
+        // First check for block0 (Repeat)
+        if (blockKey == "block0") {
+          let JSXElm = (
+            <div
+              draggable={true}
+              className="flex flex-row flex-wrap bg-yellow-500 text-white px-2 py-1 my-2 text-sm cursor-pointer"
+            >
+              Repeat{" "}
+              <input
+                id="repeat"
+                onClick={(e) => e.stopPropagation()}
+                className="mx-3 px-0.5 text-black w-10"
+                value={blockData}
+                disabled
+                type="text"
+              />{" "}
+              times
+            </div>
+          );
+          let JSXElm1 = { ...JSXElm, sprite: activeSprite };
+          setMidAreaData([...midAreaData, JSXElm1]);
+        }
         // Motion blocks
-        if (blockKey == "block1") {
+        else if (blockKey == "block1") {
           let JSXElm = (
             <div
               draggable={true}
@@ -105,26 +127,6 @@ export default function MidArea() {
                 className="mx-2 px-0.5 text-black w-10"
                 type="text"
               />
-            </div>
-          );
-          let JSXElm1 = { ...JSXElm, sprite: activeSprite };
-          setMidAreaData([...midAreaData, JSXElm1]);
-        } else if (blockKey == "block0") {
-          let JSXElm = (
-            <div
-              draggable={true}
-              className="flex flex-row flex-wrap bg-yellow-500 text-white px-2 py-1 my-2 text-sm cursor-pointer"
-            >
-              Repeat{" "}
-              <input
-                id="repeat"
-                onClick={(e) => e.stopPropagation()}
-                className="mx-3 px-0.5 text-black w-10"
-                value={blockData}
-                disabled
-                type="text"
-              />{" "}
-              times
             </div>
           );
           let JSXElm1 = { ...JSXElm, sprite: activeSprite };
