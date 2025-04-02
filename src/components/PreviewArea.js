@@ -23,6 +23,9 @@ export default function PreviewArea() {
   });
   const [eventListeners, setEventListeners] = useState({});
   const [isPlaying, setIsPlaying] = useState(false);
+  const [draggedSprite, setDraggedSprite] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
 
   const [sprites, setSprites] = useState([
     {
@@ -71,6 +74,83 @@ export default function PreviewArea() {
       }
     };
   }, []);
+
+  // Handle mouse down on a sprite
+  const handleMouseDown = (e, sprite) => {
+    // Only allow dragging when not playing animations
+    if (isPlaying) return;
+
+    e.stopPropagation();
+
+    // Set the active sprite
+    setActiveSprite(sprite.title);
+    setMultipleSprites(
+      multipleSprites.map((sp) =>
+        sp.title === sprite.title
+          ? { ...sp, isActive: "blue" }
+          : { ...sp, isActive: "gray" }
+      )
+    );
+
+    // Calculate the offset between the mouse position and the sprite position
+    const rect = e.currentTarget.getBoundingClientRect();
+    const spriteSize = ((sprite.size || 100) / 100) * 50;
+
+    setDragOffset({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    });
+
+    setDraggedSprite(sprite);
+    setIsDragging(true);
+  };
+
+  // Handle mouse move for dragging sprites
+  const handleMouseMove = (e) => {
+    if (!isDragging || !draggedSprite || isPlaying) return;
+
+    e.preventDefault();
+
+    const containerRect = containerRef.current.getBoundingClientRect();
+    const spriteSize = ((draggedSprite.size || 100) / 100) * 50;
+
+    // Calculate new position relative to the container
+    let newX = e.clientX - containerRect.left - dragOffset.x;
+    let newY = e.clientY - containerRect.top - dragOffset.y;
+
+    // Keep the sprite within the container bounds
+    newX = Math.max(0, Math.min(newX, containerRect.width - spriteSize));
+    newY = Math.max(0, Math.min(newY, containerRect.height - spriteSize));
+
+    // Update the sprite position
+    setMultipleSprites(
+      multipleSprites.map((sp) =>
+        sp.title === draggedSprite.title ? { ...sp, x: newX, y: newY } : sp
+      )
+    );
+  };
+
+  // Handle mouse up to stop dragging
+  const handleMouseUp = () => {
+    setIsDragging(false);
+    setDraggedSprite(null);
+  };
+
+  // Add event listeners for mouse move and mouse up
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+    } else {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isDragging, draggedSprite]);
 
   const handlePlayAnimation = () => {
     // If already playing, don't restart animations
@@ -460,6 +540,9 @@ export default function PreviewArea() {
     multipleSprites.forEach((sprite) => {
       // Create a listener function for each sprite
       newEventListeners[sprite.title] = () => {
+        // Don't trigger events during dragging
+        if (isDragging) return;
+
         // Execute all "When sprite clicked" events for this sprite
         const clickEvents = midAreaData.filter(
           (midElm) =>
@@ -490,7 +573,7 @@ export default function PreviewArea() {
     });
 
     setEventListeners(newEventListeners);
-  }, [multipleSprites, midAreaData]);
+  }, [multipleSprites, midAreaData, isDragging]);
 
   // Check for collisions regularly when animations are playing
   useEffect(() => {
@@ -570,15 +653,23 @@ export default function PreviewArea() {
             key={id}
             className="absolute"
             style={{
-              transition: "all 1s linear",
+              transition:
+                isDragging && draggedSprite?.title === sp.title
+                  ? "none"
+                  : "all 1s linear",
               left: `${sp.x}px`,
               top: `${sp.y}px`,
               display: sp.visible === false ? "none" : "block",
               transform: `scale(${(sp.size || 100) / 100})`,
               transformOrigin: "center",
-              cursor: "pointer",
+              cursor: isPlaying ? "pointer" : "move",
             }}
-            onClick={eventListeners[sp.title]}
+            onMouseDown={(e) => !isPlaying && handleMouseDown(e, sp)}
+            onClick={(e) => {
+              if (!isDragging && eventListeners[sp.title]) {
+                eventListeners[sp.title]();
+              }
+            }}
           >
             <div
               style={{
